@@ -22,11 +22,12 @@
             flex-direction: column;
             align-items: center;
         }
-        video, canvas {
+        video {
             width: 100%;
+            height: 380px;
+            object-fit: cover;
             border-radius: 8px;
             background: #000;
-            object-fit: cover;
         }
         button {
             width: 100%;
@@ -56,6 +57,7 @@
             background: #fff;
             margin: 10px 0;
             height: auto;
+            max-width: 100%;
             filter: grayscale(100%);
         }
     </style>
@@ -101,10 +103,16 @@
 
         document.getElementById('dateNow').innerText = currentDateStr;
 
-        // Nyalakan Kamera
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-            .then(stream => { video.srcObject = stream; })
-            .catch(err => alert("Gagal mengakses kamera: " + err));
+        // Nyalakan Kamera (Mendukung Webcam Eksternal/OTG atau Kamera HP)
+        navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            }, 
+            audio: false 
+        })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => alert("Gagal mengakses kamera: " + err));
 
         // Fungsi Ambil 3 Foto Beruntun
         async function startPhotoSession() {
@@ -116,8 +124,8 @@
                 await new Promise(r => setTimeout(r, 2500));
 
                 let tempCanvas = document.createElement('canvas');
-                tempCanvas.width = video.videoWidth || 640;
-                tempCanvas.height = video.videoHeight || 480;
+                tempCanvas.width = video.videoWidth || 1280;
+                tempCanvas.height = video.videoHeight || 720;
                 let tempCtx = tempCanvas.getContext('2d');
                 tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
                 
@@ -164,19 +172,48 @@
             });
         }
 
+        // Fungsi Helper untuk Gambar dengan Konsep Cover (Fixed & Tidak Tarik-tarik)
+        function drawImageCover(context, img, x, y, w, h) {
+            let imgRatio = img.width / img.height;
+            let targetRatio = w / h;
+            let renderW, renderH, offsetX, offsetY;
+
+            if (imgRatio > targetRatio) {
+                renderH = h;
+                renderW = img.width * (h / img.height);
+                offsetX = (w - renderW) / 2;
+                offsetY = 0;
+            } else {
+                renderW = w;
+                renderH = img.height * (w / img.width);
+                offsetX = 0;
+                offsetY = (h - renderH) / 2;
+            }
+
+            context.save();
+            context.beginPath();
+            context.rect(x, y, w, h);
+            context.clip();
+            context.drawImage(img, x + offsetX, y + offsetY, renderW, renderH);
+            context.restore();
+        }
+
         function generateReceiptLayout() {
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             drawSurreanimlFrame();
 
-            // Penyesuaian ukuran foto (332x200px) agar 3 pose pas rapi
+            // Layout 3 Foto (Ukuran Frame Kotak: 336 x 200 px)
             let yPos = 30;
             capturedImages.forEach((img) => {
                 ctx.strokeStyle = "#000000";
                 ctx.lineWidth = 1;
                 ctx.strokeRect(24, yPos - 2, 336, 204);
-                ctx.drawImage(img, 26, yPos, 332, 200);
+                
+                // Menggunakan sistem Cover agar proporsional dan tidak gepeng
+                drawImageCover(ctx, img, 26, yPos, 332, 200);
+                
                 yPos += 215; 
             });
 
@@ -211,7 +248,7 @@
             mCtx.textAlign = "center";
             mCtx.fillText("--- SURREANIML RECEIPT ---", masterCanvas.width / 2, 35);
 
-            // Tambahan Kalimat Baru
+            // Tambahan Kalimat
             mCtx.font = "bold 11px 'Courier New', monospace";
             mCtx.fillText("Foto Struk Pertama di jogja", masterCanvas.width / 2, 55);
 
@@ -225,7 +262,7 @@
             mCtx.stroke();
             mCtx.setLineDash([]);
 
-            // Kanvas Foto (3 Pose) - Digeser sedikit ke bawah agar pas dengan tambahan teks
+            // Kanvas Foto (3 Pose)
             mCtx.drawImage(canvas, 0, 110);
 
             mCtx.setLineDash([4, 4]);
