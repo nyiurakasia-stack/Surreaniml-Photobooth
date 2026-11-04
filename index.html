@@ -22,17 +22,11 @@
             flex-direction: column;
             align-items: center;
         }
-        video {
-            width: 100%;
-            max-height: 450px;
-            border-radius: 8px;
-            background: #000;
-            object-fit: contain; /* Mencegah efek cembung/fish-eye pada pratinjau */
-        }
-        canvas {
+        video, canvas {
             width: 100%;
             border-radius: 8px;
             background: #000;
+            object-fit: cover;
         }
         button {
             width: 100%;
@@ -78,10 +72,11 @@
         <!-- Hasil Struk Foto -->
         <div id="receiptSection" class="receipt-card">
             <h3>--- SURREANIML RECEIPT ---</h3>
-            <p style="font-size: 12px;">Tanggal: <span id="dateNow"></span></p>
+            <p style="font-size: 11px; margin: 2px 0; font-weight: bold;">Foto Struk Pertama di jogja</p>
+            <p style="font-size: 12px; margin-top: 8px;">Tanggal: <span id="dateNow"></span></p>
             <hr style="border-top: 1px dashed #000;">
             
-            <!-- Tempat Gabungan 3 Foto (Lebar 384px, Tinggi 680px) -->
+            <!-- Tempat Gabungan 3 Foto (Lebar 384px, Tinggi Kompak 680px) -->
             <canvas id="resultCanvas" width="384" height="680"></canvas>
             
             <hr style="border-top: 1px dashed #000;">
@@ -106,13 +101,10 @@
 
         document.getElementById('dateNow').innerText = currentDateStr;
 
-        // Nyalakan Kamera dengan rasio standar agar tidak melar/cembung
-        navigator.mediaDevices.getUserMedia({ 
-            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, 
-            audio: false 
-        })
-        .then(stream => { video.srcObject = stream; })
-        .catch(err => alert("Gagal mengakses kamera: " + err));
+        // Nyalakan Kamera
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => alert("Gagal mengakses kamera: " + err));
 
         // Fungsi Ambil 3 Foto Beruntun
         async function startPhotoSession() {
@@ -127,9 +119,8 @@
                 tempCanvas.width = video.videoWidth || 640;
                 tempCanvas.height = video.videoHeight || 480;
                 let tempCtx = tempCanvas.getContext('2d');
-                
-                // Salin frame video asli tanpa distorsi
                 tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                
                 capturedImages.push(tempCanvas);
             }
 
@@ -138,16 +129,18 @@
             generateReceiptLayout();
         }
 
-        // Bingkai Surealis Struk 58mm (3 Pose)
+        // Bingkai Surealis Disesuaikan untuk 3 Foto
         function drawSurreanimlFrame() {
             ctx.strokeStyle = "#000000";
             ctx.fillStyle = "#000000";
             ctx.lineWidth = 2;
 
+            // Bingkai Luar
             ctx.beginPath();
             ctx.rect(8, 8, canvas.width - 16, canvas.height - 16);
             ctx.stroke();
 
+            // Ornaments Sudut
             ctx.beginPath();
             ctx.arc(24, 24, 7, 0, Math.PI * 2);
             ctx.stroke();
@@ -156,6 +149,7 @@
             ctx.arc(canvas.width - 24, 24, 7, 0, Math.PI * 2);
             ctx.stroke();
 
+            // Ornamen Samping untuk 3 Foto
             let sideYPositions = [120, 330, 540];
             sideYPositions.forEach(y => {
                 ctx.beginPath();
@@ -176,30 +170,17 @@
 
             drawSurreanimlFrame();
 
+            // Penyesuaian ukuran foto (332x200px) agar 3 pose pas rapi
             let yPos = 30;
             capturedImages.forEach((img) => {
                 ctx.strokeStyle = "#000000";
                 ctx.lineWidth = 1;
                 ctx.strokeRect(24, yPos - 2, 336, 204);
-
-                // Menggunakan teknik crop center agar foto proporsional tanpa gepeng/fish-eye
-                let sWidth = img.height * (332 / 200);
-                let sHeight = img.height;
-                let sX = (img.width - sWidth) / 2;
-                let sY = 0;
-
-                if (sX < 0) {
-                    sWidth = img.width;
-                    sHeight = img.width * (200 / 332);
-                    sX = 0;
-                    sY = (img.height - sHeight) / 2;
-                }
-
-                ctx.drawImage(img, sX, sY, sWidth, sHeight, 26, yPos, 332, 200);
+                ctx.drawImage(img, 26, yPos, 332, 200);
                 yPos += 215; 
             });
 
-            // Konversi Grayscale Hitam Putih Halus untuk Thermal
+            // Grayscale Alami
             let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             let data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
@@ -214,11 +195,11 @@
             receiptSection.scrollIntoView({ behavior: 'smooth' });
         }
 
-        // Unduh Struk Utuh 3 Pose
+        // Unduh Struk Utuh 3 Pose (Thermal 58mm)
         function downloadFullReceipt() {
             let masterCanvas = document.createElement('canvas');
             masterCanvas.width = 384;
-            masterCanvas.height = 930;
+            masterCanvas.height = 950;
             let mCtx = masterCanvas.getContext('2d');
 
             mCtx.fillStyle = "#ffffff";
@@ -228,35 +209,39 @@
             mCtx.fillStyle = "#000000";
             mCtx.font = "bold 15px 'Courier New', monospace";
             mCtx.textAlign = "center";
-            mCtx.fillText("--- SURREANIML RECEIPT ---", masterCanvas.width / 2, 40);
+            mCtx.fillText("--- SURREANIML RECEIPT ---", masterCanvas.width / 2, 35);
+
+            // Tambahan Kalimat Baru
+            mCtx.font = "bold 11px 'Courier New', monospace";
+            mCtx.fillText("Foto Struk Pertama di jogja", masterCanvas.width / 2, 55);
 
             mCtx.font = "12px 'Courier New', monospace";
-            mCtx.fillText("Tanggal: " + currentDateStr, masterCanvas.width / 2, 65);
+            mCtx.fillText("Tanggal: " + currentDateStr, masterCanvas.width / 2, 78);
 
             mCtx.setLineDash([4, 4]);
             mCtx.beginPath();
-            mCtx.moveTo(20, 85);
-            mCtx.lineTo(364, 85);
+            mCtx.moveTo(20, 95);
+            mCtx.lineTo(364, 95);
             mCtx.stroke();
             mCtx.setLineDash([]);
 
-            // Kanvas Foto (3 Pose)
-            mCtx.drawImage(canvas, 0, 105);
+            // Kanvas Foto (3 Pose) - Digeser sedikit ke bawah agar pas dengan tambahan teks
+            mCtx.drawImage(canvas, 0, 110);
 
             mCtx.setLineDash([4, 4]);
             mCtx.beginPath();
-            mCtx.moveTo(20, 815);
-            mCtx.lineTo(364, 815);
+            mCtx.moveTo(20, 820);
+            mCtx.lineTo(364, 820);
             mCtx.stroke();
             mCtx.setLineDash([]);
 
             // Footer
             mCtx.font = "bold 12px 'Courier New', monospace";
-            mCtx.fillText("Made In Yogyakarta", masterCanvas.width / 2, 855);
-            mCtx.fillText("Creatures Make Culture", masterCanvas.width / 2, 875);
+            mCtx.fillText("Made In Yogyakarta", masterCanvas.width / 2, 860);
+            mCtx.fillText("Creatures Make Culture", masterCanvas.width / 2, 880);
 
             let link = document.createElement('a');
-            link.download = 'surreaniml-3pose-normal.png';
+            link.download = 'surreaniml-3pose-receipt.png';
             link.href = masterCanvas.toDataURL('image/png');
             link.click();
         }
