@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surreaniml Receipt Photobooth (3 Pose)</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #1a1a1a;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            margin: 0;
+        }
+        .container {
+            max-width: 400px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        video {
+            width: 100%;
+            max-height: 450px;
+            border-radius: 8px;
+            background: #000;
+            object-fit: contain; /* Mencegah efek cembung/fish-eye pada pratinjau */
+        }
+        canvas {
+            width: 100%;
+            border-radius: 8px;
+            background: #000;
+        }
+        button {
+            width: 100%;
+            margin-top: 15px;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        button:disabled { background-color: #555; }
+        .receipt-card {
+            width: 100%;
+            background-color: #fff;
+            color: #000;
+            padding: 15px;
+            box-sizing: border-box;
+            border-radius: 4px;
+            margin-top: 20px;
+            text-align: center;
+            display: none;
+        }
+        .receipt-card canvas {
+            background: #fff;
+            margin: 10px 0;
+            height: auto;
+            filter: grayscale(100%);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>📸 Surreaniml Receipt Photobooth</h2>
+        
+        <!-- Tampilan Kamera -->
+        <video id="camera" autoplay playsinline></video>
+        <button id="snapBtn" onclick="startPhotoSession()">AMBIL FOTO (3 Pose)</button>
+
+        <!-- Hasil Struk Foto -->
+        <div id="receiptSection" class="receipt-card">
+            <h3>--- SURREANIML RECEIPT ---</h3>
+            <p style="font-size: 12px;">Tanggal: <span id="dateNow"></span></p>
+            <hr style="border-top: 1px dashed #000;">
+            
+            <!-- Tempat Gabungan 3 Foto (Lebar 384px, Tinggi 680px) -->
+            <canvas id="resultCanvas" width="384" height="680"></canvas>
+            
+            <hr style="border-top: 1px dashed #000;">
+            <div style="font-size: 11px; margin-top: 10px; font-weight: bold; line-height: 1.4;">
+                <p style="margin: 2px 0;">Made In Yogyakarta</p>
+                <p style="margin: 2px 0;">Creatures Make Culture</p>
+            </div>
+            
+            <button style="background-color: #2ed573;" onclick="downloadFullReceipt()">SIMPAN / CETAK STRUK</button>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('camera');
+        const snapBtn = document.getElementById('snapBtn');
+        const receiptSection = document.getElementById('receiptSection');
+        const canvas = document.getElementById('resultCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let capturedImages = [];
+        let currentDateStr = new Date().toLocaleDateString('id-ID');
+
+        document.getElementById('dateNow').innerText = currentDateStr;
+
+        // Nyalakan Kamera dengan rasio standar agar tidak melar/cembung
+        navigator.mediaDevices.getUserMedia({ 
+            video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, 
+            audio: false 
+        })
+        .then(stream => { video.srcObject = stream; })
+        .catch(err => alert("Gagal mengakses kamera: " + err));
+
+        // Fungsi Ambil 3 Foto Beruntun
+        async function startPhotoSession() {
+            capturedImages = [];
+            snapBtn.disabled = true;
+
+            for (let i = 1; i <= 3; i++) {
+                snapBtn.innerText = `Bersiap... Foto ke-${i} dari 3`;
+                await new Promise(r => setTimeout(r, 2500));
+
+                let tempCanvas = document.createElement('canvas');
+                tempCanvas.width = video.videoWidth || 640;
+                tempCanvas.height = video.videoHeight || 480;
+                let tempCtx = tempCanvas.getContext('2d');
+                
+                // Salin frame video asli tanpa distorsi
+                tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+                capturedImages.push(tempCanvas);
+            }
+
+            snapBtn.innerText = "AMBIL FOTO (3 Pose)";
+            snapBtn.disabled = false;
+            generateReceiptLayout();
+        }
+
+        // Bingkai Surealis Struk 58mm (3 Pose)
+        function drawSurreanimlFrame() {
+            ctx.strokeStyle = "#000000";
+            ctx.fillStyle = "#000000";
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            ctx.rect(8, 8, canvas.width - 16, canvas.height - 16);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(24, 24, 7, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(canvas.width - 24, 24, 7, 0, Math.PI * 2);
+            ctx.stroke();
+
+            let sideYPositions = [120, 330, 540];
+            sideYPositions.forEach(y => {
+                ctx.beginPath();
+                ctx.ellipse(13, y, 6, 3, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(canvas.width - 8, y - 5);
+                ctx.lineTo(canvas.width - 15, y);
+                ctx.lineTo(canvas.width - 8, y + 5);
+                ctx.stroke();
+            });
+        }
+
+        function generateReceiptLayout() {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawSurreanimlFrame();
+
+            let yPos = 30;
+            capturedImages.forEach((img) => {
+                ctx.strokeStyle = "#000000";
+                ctx.lineWidth = 1;
+                ctx.strokeRect(24, yPos - 2, 336, 204);
+
+                // Menggunakan teknik crop center agar foto proporsional tanpa gepeng/fish-eye
+                let sWidth = img.height * (332 / 200);
+                let sHeight = img.height;
+                let sX = (img.width - sWidth) / 2;
+                let sY = 0;
+
+                if (sX < 0) {
+                    sWidth = img.width;
+                    sHeight = img.width * (200 / 332);
+                    sX = 0;
+                    sY = (img.height - sHeight) / 2;
+                }
+
+                ctx.drawImage(img, sX, sY, sWidth, sHeight, 26, yPos, 332, 200);
+                yPos += 215; 
+            });
+
+            // Konversi Grayscale Hitam Putih Halus untuk Thermal
+            let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                let avg = (data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11);
+                data[i]     = avg;
+                data[i + 1] = avg;
+                data[i + 2] = avg;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            receiptSection.style.display = 'block';
+            receiptSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Unduh Struk Utuh 3 Pose
+        function downloadFullReceipt() {
+            let masterCanvas = document.createElement('canvas');
+            masterCanvas.width = 384;
+            masterCanvas.height = 930;
+            let mCtx = masterCanvas.getContext('2d');
+
+            mCtx.fillStyle = "#ffffff";
+            mCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
+
+            // Header
+            mCtx.fillStyle = "#000000";
+            mCtx.font = "bold 15px 'Courier New', monospace";
+            mCtx.textAlign = "center";
+            mCtx.fillText("--- SURREANIML RECEIPT ---", masterCanvas.width / 2, 40);
+
+            mCtx.font = "12px 'Courier New', monospace";
+            mCtx.fillText("Tanggal: " + currentDateStr, masterCanvas.width / 2, 65);
+
+            mCtx.setLineDash([4, 4]);
+            mCtx.beginPath();
+            mCtx.moveTo(20, 85);
+            mCtx.lineTo(364, 85);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+
+            // Kanvas Foto (3 Pose)
+            mCtx.drawImage(canvas, 0, 105);
+
+            mCtx.setLineDash([4, 4]);
+            mCtx.beginPath();
+            mCtx.moveTo(20, 815);
+            mCtx.lineTo(364, 815);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+
+            // Footer
+            mCtx.font = "bold 12px 'Courier New', monospace";
+            mCtx.fillText("Made In Yogyakarta", masterCanvas.width / 2, 855);
+            mCtx.fillText("Creatures Make Culture", masterCanvas.width / 2, 875);
+
+            let link = document.createElement('a');
+            link.download = 'surreaniml-3pose-normal.png';
+            link.href = masterCanvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
