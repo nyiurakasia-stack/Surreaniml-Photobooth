@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Surreaniml Receipt Photobooth</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #flashOverlay {
+            position: fixed;
+            inset: 0;
+            background: #ffffff;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s ease-in-out;
+            z-index: 2000;
+        }
+
+        /* Main Grid Layout untuk Desktop/Laptop */
+        #main-app {
+            display: grid;
+            grid-template-columns: 70% 30%;
+            width: 100vw;
+            height: 100vh;
+            background: #111;
+        }
+
+        #visual-area {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #countdownOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 80px;
+            font-weight: bold;
+            color: #ff4757;
+            text-shadow: 2px 2px 10px #000;
+            display: none;
+            z-index: 10;
+        }
+
+        #control-panel {
+            background: #181818;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-left: 2px solid #333;
+            text-align: center;
+            height: 100%;
+        }
+
+        .brand-title {
+            color: #ff4757;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+        }
+
+        .brand-sub {
+            font-size: 11px;
+            color: #aaa;
+            margin-bottom: 20px;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 16px 10px;
+            font-size: 16px;
+            font-weight: bold;
+            background-color: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .btn-action:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+
+        /* KHUSUS HP (Portrait Screen): Otomatis Paksa Tampilan Landscape Fullscreen */
+        @media screen and (max-width: 768px) {
+            body {
+                width: 100vh;
+                height: 100vw;
+                transform: rotate(90deg);
+                transform-origin: top left;
+                position: absolute;
+                top: 0;
+                left: 100vw;
+                overflow: auto;
+            }
+            #main-app {
+                width: 100vh;
+                height: 100vw;
+            }
+        }
+
+        /* Area Hasil Struk */
+        #receiptSection {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #fff;
+            color: #000;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+            display: none;
+            z-index: 3000;
+            overflow-y: auto;
+        }
+
+        #receiptSection canvas {
+            background: #fff;
+            margin: 10px auto;
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="flashOverlay"></div>
+
+    <div id="main-app">
+        <div id="visual-area">
+            <video id="camera" autoplay playsinline muted></video>
+            <div id="countdownOverlay">3</div>
+        </div>
+
+        <div id="control-panel">
+            <p class="brand-title">SURREANIML</p>
+            <p class="brand-sub">3 Pose Receipt</p>
+            <button id="snapBtn" class="btn-action" onclick="startPhotoSession()" disabled>MEMBUKA...</button>
+        </div>
+    </div>
+
+    <div id="receiptSection">
+        <h3>--- SURREANIML RECEIPT ---</h3>
+        <p style="font-size: 11px; margin: 4px 0; font-weight: bold;">Foto Struk Pertama di Jogja</p>
+        <p style="font-size: 12px; margin-top: 8px;">Tanggal: <span id="dateNow"></span></p>
+        <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+        
+        <canvas id="resultCanvas" width="384" height="680"></canvas>
+        
+        <hr style="border-top: 1px dashed #000; margin: 10px 0;">
+        <div style="font-size: 11px; margin-top: 10px; font-weight: bold; line-height: 1.4;">
+            <p style="margin: 2px 0;">Made In Yogyakarta</p>
+            <p style="margin: 2px 0;">Creatures Make Culture</p>
+        </div>
+        
+        <button class="btn-action" style="background-color: #2ed573; margin-top: 15px; max-width: 300px;" onclick="downloadFullReceipt()">SIMPAN / CETAK STRUK</button>
+    </div>
+
+    <script>
+        const video = document.getElementById('camera');
+        const snapBtn = document.getElementById('snapBtn');
+        const receiptSection = document.getElementById('receiptSection');
+        const canvas = document.getElementById('resultCanvas');
+        const ctx = canvas.getContext('2d');
+        const countdownOverlay = document.getElementById('countdownOverlay');
+        const flashOverlay = document.getElementById('flashOverlay');
+        
+        let capturedImages = [];
+        let currentDateStr = new Date().toLocaleDateString('id-ID');
+        document.getElementById('dateNow').innerText = currentDateStr;
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+                snapBtn.innerText = "AMBIL FOTO";
+                snapBtn.disabled = false;
+            } catch (err) {
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    video.srcObject = fallbackStream;
+                    snapBtn.innerText = "AMBIL FOTO";
+                    snapBtn.disabled = false;
+                } catch (e) {
+                    snapBtn.innerText = "KAMERA ERROR";
+                    alert("Tidak dapat mengakses kamera.");
+                }
+            }
+        }
+
+        initCamera();
+
+        async function triggerFlash() {
+            flashOverlay.style.opacity = '1';
+            await new Promise(r => setTimeout(r, 150));
+            flashOverlay.style.opacity = '0';
+        }
+
+        async function startPhotoSession() {
+            capturedImages = [];
+            snapBtn.disabled = true;
+            receiptSection.style.display = 'none';
+            countdownOverlay.style.display = 'flex';
+
+            for (let i = 1; i <= 3; i++) {
+                snapBtn.innerText = `Pose ${i}/3`;
+                
+                for (let c = 3; c > 0; c--) {
+                    countdownOverlay.innerText = c;
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+                countdownOverlay.innerText = "📸";
+                await triggerFlash(); 
+                await new Promise(r => setTimeout(r, 200));
+
+                let tempCanvas = document.createElement('canvas');
+                let vWidth = video.videoWidth || 640;
+                let vHeight = video.videoHeight || 480;
+                let tCtx = tempCanvas.getContext('2d');
+
+                tempCanvas.width = 664;
+                tempCanvas.height = 400;
+
+                if (vHeight > vWidth) {
+                    tCtx.save();
+                    tCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
+                    tCtx.rotate(Math.PI / 2);
+                    
+                    let targetRatio = 400 / 664;
+                    let cropH = vHeight;
+                    let cropW = vHeight * targetRatio;
+                    if (cropW > vWidth) {
+                        cropW = vWidth;
+                        cropH = vWidth / targetRatio;
+                    }
+                    let cropX = (vWidth - cropW) / 2;
+                    let cropY = (vHeight - cropH) / 2;
+
+                    tCtx.drawImage(video, cropX, cropY, cropW, cropH, -tempCanvas.height / 2, -tempCanvas.width / 2, tempCanvas.height, tempCanvas.width);
+                    tCtx.restore();
+                } else {
+                    let targetRatio = 332 / 200;
+                    let cropW = vWidth;
+                    let cropH = vWidth / targetRatio;
+                    if (cropH > vHeight) {
+                        cropH = vHeight;
+                        cropW = vHeight * targetRatio;
+                    }
+                    let cropX = (vWidth - cropW) / 2;
+                    let cropY = (vHeight - cropH) / 2;
+
+                    tCtx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, tempCanvas.width, tempCanvas.height);
+                }
+
+                capturedImages.push(tempCanvas);
+            }
+
+            countdownOverlay.style.display = 'none';
+            snapBtn.innerText = "AMBIL FOTO";
+            snapBtn.disabled = false;
+            generateReceiptLayout();
+        }
+
+        function drawSurreanimlFrame() {
+            ctx.strokeStyle = "#000000";
+            ctx.fillStyle = "#000000";
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            ctx.rect(8, 8, canvas.width - 16, canvas.height - 16);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(24, 24, 6, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(canvas.width - 24, 24, 6, 0, Math.PI * 2);
+            ctx.stroke();
+
+            let sideYPositions = [120, 330, 540];
+            sideYPositions.forEach(y => {
+                ctx.beginPath();
+                ctx.ellipse(13, y, 5, 2.5, 0, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(canvas.width - 8, y - 4);
+                ctx.lineTo(canvas.width - 14, y);
+                ctx.lineTo(canvas.width - 8, y + 4);
+                ctx.stroke();
+            });
+        }
+
+        function generateReceiptLayout() {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawSurreanimlFrame();
+
+            let yPos = 35;
+            capturedImages.forEach((img) => {
+                ctx.strokeStyle = "#000000";
+                ctx.lineWidth = 1;
+                ctx.strokeRect(24, yPos - 2, 336, 204);
+
+                ctx.drawImage(img, 0, 0, img.width, img.height, 26, yPos, 332, 200);
+                yPos += 215;
+            });
+
+            let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                let avg = (data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11);
+                data[i]     = avg;
+                data[i + 1] = avg;
+                data[i + 2] = avg;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            receiptSection.style.display = 'block';
+        }
+
+        function downloadFullReceipt() {
+            let masterCanvas = document.createElement('canvas');
+            masterCanvas.width = 384;
+            masterCanvas.height = 950;
+            let mCtx = masterCanvas.getContext('2d');
+
+            mCtx.fillStyle = "#ffffff";
+            mCtx.fillRect(0, 0, masterCanvas.width, masterCanvas.height);
+
+            mCtx.fillStyle = "#000000";
+            mCtx.font = "bold 15px 'Courier New', monospace";
+            mCtx.textAlign = "center";
+            mCtx.fillText("--- SURREANIML RECEIPT ---", masterCanvas.width / 2, 35);
+
+            mCtx.font = "bold 11px 'Courier New', monospace";
+            mCtx.fillText("Foto Struk Pertama di Jogja", masterCanvas.width / 2, 55);
+
+            mCtx.font = "12px 'Courier New', monospace";
+            mCtx.fillText("Tanggal: " + currentDateStr, masterCanvas.width / 2, 78);
+
+            mCtx.setLineDash([4, 4]);
+            mCtx.beginPath();
+            mCtx.moveTo(20, 95);
+            mCtx.lineTo(364, 95);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+
+            mCtx.drawImage(canvas, 0, 110);
+
+            mCtx.setLineDash([4, 4]);
+            mCtx.beginPath();
+            mCtx.moveTo(20, 820);
+            mCtx.lineTo(364, 820);
+            mCtx.stroke();
+            mCtx.setLineDash([]);
+
+            mCtx.font = "bold 12px 'Courier New', monospace";
+            mCtx.fillText("Made In Yogyakarta", masterCanvas.width / 2, 860);
+            mCtx.fillText("Creatures Make Culture", masterCanvas.width / 2, 880);
+
+            let link = document.createElement('a');
+            link.download = 'surreaniml-3pose-receipt.png';
+            link.href = masterCanvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
